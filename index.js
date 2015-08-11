@@ -1,6 +1,16 @@
+const { Cu, Ci } = require('chrome');
+Cu.import("resource://gre/modules/ctypes.jsm");
+Cu.import("resource://gre/modules/Services.jsm");
+
+var sdkSelf = require('sdk/self');
 // This can be expanded to show some settings page to register & unregister safe: protocol handling, probably much more
 var handleIconClick = function(state) {
-  require("sdk/tabs").open("http://www.maidsafe.net/");
+  //require("sdk/tabs").open("http://www.maidsafe.net/");
+  //var nativeUrl = Services.io.newURI(sdkSelf.data.url("libc_wrapper.dll"),null,null).QueryInterface(Ci.nsIFileURL).file.path;
+  var lib = ctypes.open("k:\\\\Maidsafe\\\\frontend\\\\git\\\\Safe-Addon\\\libc_wrapper.dll");
+  //var getSize = lib.declare
+  console.log("read");
+  lib.close();
 };
 
 require('sdk/ui/button/action').ActionButton({

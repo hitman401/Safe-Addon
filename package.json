@@ -1,6 +1,6 @@
 {
-  "title": "Safe",
-  "name": "sample",
+  "title": "Safe Addon",
+  "name": "Safe-Addon",
   "version": "0.0.1",
   "description": "A example add-on for Safe Network",
   "main": "index.js",
