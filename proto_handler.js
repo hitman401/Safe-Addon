@@ -247,9 +247,8 @@ PipeChannel.prototype = {
         throw "Failed to get file content. Err: " + errorCode;
       }
       this.channel.contentLength = fileContent.length;
-      var fileContent = [];
       bout.setOutputStream(this.pipe.outputStream);
-      bout.writeByteArray(fileContent, fileContent.length);
+      bout.writeByteArray(fileContent.buffer, fileContent.length);
       bout.close();
       lib.close();
     } catch (err) {
