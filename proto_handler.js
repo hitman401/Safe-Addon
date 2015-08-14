@@ -1,5 +1,5 @@
-const { CC, Cc, Ci, Cu, Cr, components } = require('chrome');
-Cu.import("resource://gre/modules/ctypes.jsm");
+const { CC, Cc, Ci, Cu, Cr, components, ChromeWorker } = require('chrome');
+//Cu.import("resource://gre/modules/ctypes.jsm");
 Cu.import("resource://gre/modules/Services.jsm");
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 const SCHEME = "safe";
@@ -172,6 +172,16 @@ PipeChannel.prototype = {
   },
 
   asyncOpen: function (listener, context) {
+
+    //var lib;
+    //console.log('1');
+    //try {
+    //  lib = ctypes.open('./libc_wrapper.dll');
+    //} catch (e) {
+    //  console.log(e.message);
+    //}
+    //
+    //console.log('2');
     try {
       //if (false/* some reason to abort */) {
       //  this.request.cancel(Cr.NS_BINDING_FAILED);
@@ -189,25 +199,23 @@ PipeChannel.prototype = {
         return temp;
       };
 
-      var lib = ctypes.open("./libc_wrapper.so");
-
-      var getFileSize = lib.declare('c_get_file_size_from_service_home_dir',
-          ctypes.default_abi,
-          ctypes.int32_t,
-          ctypes.char.ptr,
-          ctypes.char.ptr,
-          ctypes.char.ptr,
-          ctypes.bool,
-          ctypes.size_t.ptr);
-
-      var getFileContent = lib.declare('c_get_file_content_from_service_home_dir',
-          ctypes.default_abi,
-          ctypes.int32_t,
-          ctypes.char.ptr,
-          ctypes.char.ptr,
-          ctypes.char.ptr,
-          ctypes.bool,
-          ctypes.uint8_t.ptr);
+      //var getFileSize = lib.declare('c_get_file_size_from_service_home_dir',
+      //    ctypes.default_abi,
+      //    ctypes.int32_t,
+      //    ctypes.char.ptr,
+      //    ctypes.char.ptr,
+      //    ctypes.char.ptr,
+      //    ctypes.bool,
+      //    ctypes.size_t.ptr);
+      //
+      //var getFileContent = lib.declare('c_get_file_content_from_service_home_dir',
+      //    ctypes.default_abi,
+      //    ctypes.int32_t,
+      //    ctypes.char.ptr,
+      //    ctypes.char.ptr,
+      //    ctypes.char.ptr,
+      //    ctypes.bool,
+      //    ctypes.uint8_t.ptr);
 
       var tokens = this.channel.URI.path.split('/');
       var filePath = '';
@@ -231,27 +239,62 @@ PipeChannel.prototype = {
           publicName = getPublicName(1, tokens);
       }
       // publicName, serviceName, filePath
+      var worker = new ChromeWorker("./worker.js");
+      worker.onmessage = function(msg) {
+        if (msg.error) {
+          console.log(msg.error)
+          return;
+        }
+        switch (msg.method) {
+          case 'size':
+            try {
+              worker.postMessage({method: 'content', size: msg.data});
+            } catch (err) {
+              if (err.result != Cr.NS_BINDING_ABORTED) {
+                Cu.reportError(err);
+              }
+            }
+            break;
+          case 'content':
+              try {
+                var mimeService = Cc["@mozilla.org/mime;1"].getService(Ci.nsIMIMEService);
+                this.channel.contentType = filePath ? mimeService.getTypeFromURI(this.channel.URI) : 'text/html';
+                this.channel.asyncOpen(listener, context);
+                var bout = Cc["@mozilla.org/binaryoutputstream;1"].getService(Ci.nsIBinaryOutputStream);
+                bout.setOutputStream(this.pipe.outputStream);
+                bout.writeByteArray(msg.data, msg.data.length);
+                bout.close();
+              } catch (err) {
+                if (err.result != Cr.NS_BINDING_ABORTED) {
+                  Cu.reportError(err);
+                }
+              }
+            break;
+        }
+      };
+      worker.postMessage({method: 'size'});
+/*
       var mimeService = Cc["@mozilla.org/mime;1"].getService(Ci.nsIMIMEService);
       this.channel.contentType = filePath ? mimeService.getTypeFromURI(this.channel.URI) : 'text/html';
       this.channel.asyncOpen(listener, context);
       var bout = Cc["@mozilla.org/binaryoutputstream;1"].getService(Ci.nsIBinaryOutputStream);
-      var fileSizeCtypes = ctypes.size_t(0);
-      var errorCode = getFileSize(publicName, serviceName, filePath, false, fileSizeCtypes.address());
-      if (errorCode > 0) {
-        throw "Failed to get  file size. Err: " + errorCode;
-      }
-      var Uint8Array_t = ctypes.ArrayType(ctypes.uint8_t, fileSizeCtypes.value);
-      var fileContent = Uint8Array_t();
-      errorCode = getFileContent(publicName, serviceName, filePath, false, fileContent.addressOfElement(0));
-      if (errorCode > 0) {
-        throw "Failed to get file content. Err: " + errorCode;
-      }
-      this.channel.contentLength = fileContent.length;
+      //var fileSizeCtypes = ctypes.size_t(0);
+      //var errorCode = getFileSize(publicName, serviceName, filePath, false, fileSizeCtypes.address());
+      //if (errorCode > 0) {
+      //  throw "Failed to get  file size. Err: " + errorCode;
+      //}
+      //var Uint8Array_t = ctypes.ArrayType(ctypes.uint8_t, fileSizeCtypes.value);
+      //var fileContent = Uint8Array_t();
+      //errorCode = getFileContent(publicName, serviceName, filePath, false, fileContent.addressOfElement(0));
+      //if (errorCode > 0) {
+      //  throw "Failed to get file content. Err: " + errorCode;
+      //}
+      //this.channel.contentLength = fileContent.length;
       var fileContent = [];
       bout.setOutputStream(this.pipe.outputStream);
       bout.writeByteArray(fileContent, fileContent.length);
       bout.close();
-      lib.close();
+      //lib.close();*/
     } catch (err) {
       if (err.result != Cr.NS_BINDING_ABORTED) {
         Cu.reportError(err);
