@@ -5,6 +5,79 @@ Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 const SCHEME = "safe";
 const nsIURI = CC("@mozilla.org/network/simple-uri;1", "nsIURI");
 
+var Handler = function(libPath, workerPath, pipeChannel) {
+  var worker = new ChromeWorker(workerPath);
+
+  var getParams = function() {
+    var getPublicName = function(tokenStartPosition, tokens) {
+      var temp = '';
+      for (var i = tokenStartPosition; i < tokens.length; i++) {
+        temp += tokens[i];
+        if (i+1 !== tokens.length) {
+          temp += '.';
+        }
+      }
+      return temp;
+    };
+
+    var tokens = pipeChannel.channel.URI.path.split('/');
+    var filePath = '';
+    if (tokens.length > 1) { // .join() is not available (SDK Array type)
+      for (var i = 1; i<tokens.length; i++) {
+        filePath += tokens[i];
+        if (i+1 !== tokens.length) {
+          filePath += '/';
+        }
+      }
+    }
+    tokens = tokens[0].split('.');
+
+    var serviceName;
+    var publicName;
+    if (tokens.length < 3) {
+      serviceName = 'www'; // default lookup service
+      publicName = getPublicName(1, tokens);
+    } else {
+      serviceName = tokens[0];
+      publicName = getPublicName(1, tokens);
+    }
+    return { publicName: publicName, serviceName: serviceName, filePath: filePath };
+  };
+
+  var params = getParams();
+
+  worker.onmessage = function(response) {
+    var msg = response.data;
+    if (msg.error) {
+      this.terminate(); // terminates the worker
+      pipeChannel.status = 500;
+      pipeChannel.close();
+      return;
+    }
+    switch (msg.method) {
+      case 'size':
+        params.size = msg.data;
+        worker.postMessage({ method: 'content', libPath: libPath, params: params });
+        break;
+      case 'content':
+        try {
+          this.terminate(); // terminates the worker
+          var mimeService = Cc["@mozilla.org/mime;1"].getService(Ci.nsIMIMEService);
+          pipeChannel.channel.contentType = params.filePath ? mimeService.getTypeFromURI(pipeChannel.channel.URI) : 'text/html';
+          pipeChannel.channel.asyncOpen(listener, context);
+          var bout = Cc["@mozilla.org/binaryoutputstream;1"].getService(Ci.nsIBinaryOutputStream);
+          bout.setOutputStream(pipeChannel.pipe.outputStream);
+          bout.writeByteArray(msg.data, msg.data.length);
+          bout.close();
+        } catch (err) {
+          pipeChannel.status = 500;
+          pipeChannel.close();
+        }
+        break;
+    }
+  };
+  worker.postMessage({method: 'size', libPath: libPath, params: params});
+};
 
 function SafeProtocolHandler() {
 }
@@ -172,134 +245,8 @@ PipeChannel.prototype = {
   },
 
   asyncOpen: function (listener, context) {
-
-    //var lib;
-    //console.log('1');
-    //try {
-    //  lib = ctypes.open('./libc_wrapper.dll');
-    //} catch (e) {
-    //  console.log(e.message);
-    //}
-    //
-    //console.log('2');
-    try {
-      //if (false/* some reason to abort */) {
-      //  this.request.cancel(Cr.NS_BINDING_FAILED);
-      //  Cc["@mozilla.org/embedcomp/prompt-service;1"].getService(Ci.nsIPromptService).alert(null, 'Error message.', 'Error message.');
-      //  return;
-      //}
-      var getPublicName = function(tokenStartPosition, tokens) {
-        var temp = '';
-        for (var i = tokenStartPosition; i < tokens.length; i++) {
-          temp += tokens[i];
-          if (i+1 !== tokens.length) {
-            temp += '.';
-          }
-        }
-        return temp;
-      };
-
-      //var getFileSize = lib.declare('c_get_file_size_from_service_home_dir',
-      //    ctypes.default_abi,
-      //    ctypes.int32_t,
-      //    ctypes.char.ptr,
-      //    ctypes.char.ptr,
-      //    ctypes.char.ptr,
-      //    ctypes.bool,
-      //    ctypes.size_t.ptr);
-      //
-      //var getFileContent = lib.declare('c_get_file_content_from_service_home_dir',
-      //    ctypes.default_abi,
-      //    ctypes.int32_t,
-      //    ctypes.char.ptr,
-      //    ctypes.char.ptr,
-      //    ctypes.char.ptr,
-      //    ctypes.bool,
-      //    ctypes.uint8_t.ptr);
-
-      var tokens = this.channel.URI.path.split('/');
-      var filePath = '';
-      if (tokens.length > 1) { // .join() is not available (SDK Array type)
-        for (var i = 1; i<tokens.length; i++) {
-          filePath += tokens[i];
-          if (i+1 !== tokens.length) {
-            filePath += '/';
-          }
-        }
-      }
-      tokens = tokens[0].split('.');
-
-      var serviceName;
-      var publicName;
-      if (tokens.length < 3) {
-          serviceName = 'www'; // default lookup service
-          publicName = getPublicName(1, tokens);
-      } else {
-          serviceName = tokens[0];
-          publicName = getPublicName(1, tokens);
-      }
-      // publicName, serviceName, filePath
-      var worker = new ChromeWorker("./worker.js");
-      worker.onmessage = function(msg) {
-        if (msg.error) {
-          console.log(msg.error)
-          return;
-        }
-        switch (msg.method) {
-          case 'size':
-            try {
-              worker.postMessage({method: 'content', size: msg.data});
-            } catch (err) {
-              if (err.result != Cr.NS_BINDING_ABORTED) {
-                Cu.reportError(err);
-              }
-            }
-            break;
-          case 'content':
-              try {
-                var mimeService = Cc["@mozilla.org/mime;1"].getService(Ci.nsIMIMEService);
-                this.channel.contentType = filePath ? mimeService.getTypeFromURI(this.channel.URI) : 'text/html';
-                this.channel.asyncOpen(listener, context);
-                var bout = Cc["@mozilla.org/binaryoutputstream;1"].getService(Ci.nsIBinaryOutputStream);
-                bout.setOutputStream(this.pipe.outputStream);
-                bout.writeByteArray(msg.data, msg.data.length);
-                bout.close();
-              } catch (err) {
-                if (err.result != Cr.NS_BINDING_ABORTED) {
-                  Cu.reportError(err);
-                }
-              }
-            break;
-        }
-      };
-      worker.postMessage({method: 'size'});
-/*
-      var mimeService = Cc["@mozilla.org/mime;1"].getService(Ci.nsIMIMEService);
-      this.channel.contentType = filePath ? mimeService.getTypeFromURI(this.channel.URI) : 'text/html';
-      this.channel.asyncOpen(listener, context);
-      var bout = Cc["@mozilla.org/binaryoutputstream;1"].getService(Ci.nsIBinaryOutputStream);
-      //var fileSizeCtypes = ctypes.size_t(0);
-      //var errorCode = getFileSize(publicName, serviceName, filePath, false, fileSizeCtypes.address());
-      //if (errorCode > 0) {
-      //  throw "Failed to get  file size. Err: " + errorCode;
-      //}
-      //var Uint8Array_t = ctypes.ArrayType(ctypes.uint8_t, fileSizeCtypes.value);
-      //var fileContent = Uint8Array_t();
-      //errorCode = getFileContent(publicName, serviceName, filePath, false, fileContent.addressOfElement(0));
-      //if (errorCode > 0) {
-      //  throw "Failed to get file content. Err: " + errorCode;
-      //}
-      //this.channel.contentLength = fileContent.length;
-      var fileContent = [];
-      bout.setOutputStream(this.pipe.outputStream);
-      bout.writeByteArray(fileContent, fileContent.length);
-      bout.close();
-      //lib.close();*/
-    } catch (err) {
-      if (err.result != Cr.NS_BINDING_ABORTED) {
-        Cu.reportError(err);
-      }
-    }
+    var sdkSelf = require('sdk/self');
+    new Handler(sdkSelf.data.url('libc_wrapper.dll'), sdkSelf.data.url('worker.js'), this);
   },
 
   open: function () {
