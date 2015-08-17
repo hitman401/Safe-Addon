@@ -225,31 +225,56 @@ PipeChannel.prototype = {
       var publicName;
       if (tokens.length < 3) {
           serviceName = 'www'; // default lookup service
-          publicName = getPublicName(1, tokens);
+          publicName = getPublicName(0, tokens);
       } else {
           serviceName = tokens[0];
           publicName = getPublicName(1, tokens);
       }
+
+      if (!filePath) {
+        filePath = 'index.html';
+      }
+
+      console.log("Services", serviceName, "Dns:", publicName, "filePath:", filePath);
       // publicName, serviceName, filePath
+
       var mimeService = Cc["@mozilla.org/mime;1"].getService(Ci.nsIMIMEService);
-      this.channel.contentType = filePath ? mimeService.getTypeFromURI(this.channel.URI) : 'text/html';
+
+      var temp = filePath.split('.');
+      console.log("=============== ", temp);
+      console.log("sdljfdsjlf", mimeService.getTypeFromExtension(temp[temp.length - 1]));
+
+      this.channel.contentType = filePath ? mimeService.getTypeFromExtension(temp[temp.length - 1]) : 'text/html';
+
       this.channel.asyncOpen(listener, context);
+
       var bout = Cc["@mozilla.org/binaryoutputstream;1"].getService(Ci.nsIBinaryOutputStream);
       var fileSizeCtypes = ctypes.size_t(0);
       var errorCode = getFileSize(publicName, serviceName, filePath, false, fileSizeCtypes.address());
+
       if (errorCode > 0) {
         throw "Failed to get  file size. Err: " + errorCode;
       }
+
       var Uint8Array_t = ctypes.ArrayType(ctypes.uint8_t, fileSizeCtypes.value);
       var fileContent = Uint8Array_t();
       errorCode = getFileContent(publicName, serviceName, filePath, false, fileContent.addressOfElement(0));
       if (errorCode > 0) {
         throw "Failed to get file content. Err: " + errorCode;
       }
-      this.channel.contentLength = fileContent.length;
+
+
+      var fileBuffer = [];
+      for(var i = 0; i< fileContent.length; ++i) {
+        fileBuffer.push(fileContent.addressOfElement(i).contents);
+      }
+
+      this.channel.contentLength = fileBuffer.length;
+
       bout.setOutputStream(this.pipe.outputStream);
-      bout.writeByteArray(fileContent.buffer, fileContent.length);
+      bout.writeByteArray(fileBuffer, fileContent.length);
       bout.close();
+
       lib.close();
     } catch (err) {
       if (err.result != Cr.NS_BINDING_ABORTED) {
