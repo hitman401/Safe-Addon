@@ -36,10 +36,13 @@ var Handler = function(libPath, workerPath, pipeChannel) {
     var publicName;
     if (tokens.length < 3) {
       serviceName = 'www'; // default lookup service
-      publicName = getPublicName(1, tokens);
+      publicName = getPublicName(0, tokens);
     } else {
       serviceName = tokens[0];
       publicName = getPublicName(1, tokens);
+    }
+    if (!filePath) { 
+      filePath = 'index.html';
     }
     return { publicName: publicName, serviceName: serviceName, filePath: filePath };
   };
@@ -48,12 +51,14 @@ var Handler = function(libPath, workerPath, pipeChannel) {
 
   worker.onmessage = function(response) {
     var msg = response.data;
-    if (msg.error) {
+    console.log(msg.method, msg.error);
+    if (msg.error !== 0) {
       this.terminate(); // terminates the worker
       pipeChannel.status = 500;
       pipeChannel.close();
       return;
     }
+    var c = 0;
     switch (msg.method) {
       case 'size':
         params.size = msg.data;
@@ -61,21 +66,34 @@ var Handler = function(libPath, workerPath, pipeChannel) {
         break;
       case 'content':
         try {
-          this.terminate(); // terminates the worker
+          console.log('Content Recieved : ' + msg.data.length);
+          var temp = params.filePath.split('.');
           var mimeService = Cc["@mozilla.org/mime;1"].getService(Ci.nsIMIMEService);
-          pipeChannel.channel.contentType = params.filePath ? mimeService.getTypeFromURI(pipeChannel.channel.URI) : 'text/html';
-          pipeChannel.channel.asyncOpen(listener, context);
+          pipeChannel.channel.contentLength = msg.data.length + 1;
+          pipeChannel.channel.contentType = mimeService.getTypeFromExtension(temp[temp.length - 1]);
           var bout = Cc["@mozilla.org/binaryoutputstream;1"].getService(Ci.nsIBinaryOutputStream);
           bout.setOutputStream(pipeChannel.pipe.outputStream);
-          bout.writeByteArray(msg.data, msg.data.length);
-          bout.close();
+          var buff = [];
+                    console.log('Dat available : ' + msg[70000])          
+          for (var i = 0; i<msg.data.length; i++) {
+             buff.push(msg.data[i]);
+             if (buff.length === 1024) {
+                c += 1024;               
+                bout.writeByteArray(buff, buff.length);
+                buff = [];
+             }
+          }
+          bout.writeByteArray(buff, buff.length);
         } catch (err) {
-          pipeChannel.status = 500;
-          pipeChannel.close();
+	  console.log('completed', c);	
+          console.log(err.message); 
         }
+        bout.close(); 
+        this.terminate(); // terminates the worker
         break;
     }
   };
+  console.log(params);
   worker.postMessage({method: 'size', libPath: libPath, params: params});
 };
 
@@ -246,7 +264,8 @@ PipeChannel.prototype = {
 
   asyncOpen: function (listener, context) {
     var sdkSelf = require('sdk/self');
-    new Handler(sdkSelf.data.url('libc_wrapper.dll'), sdkSelf.data.url('worker.js'), this);
+    this.channel.asyncOpen(listener, context);
+    new Handler('./libc_wrapper.so', sdkSelf.data.url('worker.js'), this);
   },
 
   open: function () {
