@@ -19,3 +19,8 @@ exports.SafeProtocol = function(component) {
   };
   Object.freeze(this);
 };
+
+exports.searchForProtocol = function(tab) {
+
+};
+
