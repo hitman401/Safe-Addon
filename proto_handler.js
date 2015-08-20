@@ -20,13 +20,10 @@ SafeProtocolHandler.prototype = Object.freeze({
     return false;
   },
   protocolFlags: Ci.nsIProtocolHandler.URI_NOAUTH | Ci.nsIProtocolHandler.URI_LOADABLE_BY_ANYONE,
-  newURI: function (aSpec, aOriginCharset, aBaseURI) {
-    if (aBaseURI && aBaseURI.scheme == SCHEME) {
-      return Services.io.newURI(aSpec, aOriginCharset);
-    }
-    var rv = new nsIURI();
-    rv.spec = aSpec;
-    return rv;
+  newURI: function (aSpec, aOriginCharset, aBaseURI) {    
+    var uri = Cc["@mozilla.org/network/simple-uri;1"].createInstance(Ci.nsIURI);
+    uri.spec = aSpec;
+    return uri;
   },
   newChannel: function (aURI) {
     var channel = new PipeChannel(aURI);
@@ -173,11 +170,6 @@ PipeChannel.prototype = {
 
   asyncOpen: function (listener, context) {
     try {
-      //if (false/* some reason to abort */) {
-      //  this.request.cancel(Cr.NS_BINDING_FAILED);
-      //  Cc["@mozilla.org/embedcomp/prompt-service;1"].getService(Ci.nsIPromptService).alert(null, 'Error message.', 'Error message.');
-      //  return;
-      //}
       var getPublicName = function(tokenStartPosition, tokens) {
         var temp = '';
         for (var i = tokenStartPosition; i < tokens.length; i++) {
@@ -189,6 +181,7 @@ PipeChannel.prototype = {
         return temp;
       };
 
+      // TODO Load the lib using the SDK path
       var lib = ctypes.open("./libc_wrapper.so");
 
       var getFileSize = lib.declare('c_get_file_size_from_service_home_dir',
@@ -209,6 +202,7 @@ PipeChannel.prototype = {
           ctypes.bool,
           ctypes.uint8_t.ptr);
 
+      // TODO move the URI parsing to a seperate file Parser.js
       var tokens = this.channel.URI.path.split('/');
       var filePath = '';
       if (tokens.length > 1) { // .join() is not available (SDK Array type)
@@ -241,9 +235,7 @@ PipeChannel.prototype = {
       var mimeService = Cc["@mozilla.org/mime;1"].getService(Ci.nsIMIMEService);
 
       var temp = filePath.split('.');
-      console.log("=============== ", temp);
-      console.log("sdljfdsjlf", mimeService.getTypeFromExtension(temp[temp.length - 1]));
-
+      
       this.channel.contentType = filePath ? mimeService.getTypeFromExtension(temp[temp.length - 1]) : 'text/html';
 
       this.channel.asyncOpen(listener, context);
@@ -272,14 +264,17 @@ PipeChannel.prototype = {
       this.channel.contentLength = fileBuffer.length;
 
       bout.setOutputStream(this.pipe.outputStream);
+      
       bout.writeByteArray(fileBuffer, fileContent.length);
+            
       bout.close();
-
       lib.close();
     } catch (err) {
+      console.error(err.message);
       if (err.result != Cr.NS_BINDING_ABORTED) {
         Cu.reportError(err);
       }
+      this.close();
     }
   },
 
