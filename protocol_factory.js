@@ -9,13 +9,17 @@ exports.SafeProtocol = function(component) {
     return new component();
   };
   this.register = function() {
-    Cm.registerFactory(component.prototype.classID,
+    if (!Cm.isContractIDRegistered(component.prototype.contractID)) {
+       Cm.registerFactory(component.prototype.classID,
         component.prototype.classDescription,
         component.prototype.contractID,
         this);
+    }    
   };
   this.unregister = function() {
-    Cm.unregisterFactory(component.prototype.classID, this);
+    if (Cm.isContractIDRegistered(component.prototype.contractID)) {
+      Cm.unregisterFactory(component.prototype.classID, this);
+    }
   };
   Object.freeze(this);
 };

@@ -22,3 +22,4 @@ var factory = new require('./protocol_factory');
 var handlers = require('./proto_handler');
 var safeProtocol = new factory.SafeProtocol(handlers.SafeProtocolHandler);
 safeProtocol.register();
+

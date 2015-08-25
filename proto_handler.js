@@ -2,10 +2,32 @@ const { CC, Cc, Ci, Cu, Cr, components } = require('chrome');
 Cu.import("resource://gre/modules/ctypes.jsm");
 Cu.import("resource://gre/modules/Services.jsm");
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
-
+const ResProtocolHandler = Services.io.getProtocolHandler("resource").
+                           QueryInterface(Ci.nsIResProtocolHandler);
+const ChromeRegistry = Cc["@mozilla.org/chrome/chrome-registry;1"].
+                       getService(Ci.nsIChromeRegistry);
+const {data} = require('sdk/self');
 const SCHEME = "safe";
 const SEGMENT_SIZE = 1000;
 const MAX_SEGMENT_COUNT = 1000;
+
+/**
+ * Returns FileURI.
+ * @param uri - URI for a file
+ * @returns FileURI
+ */
+function resolveToFile(uri) {
+  switch (uri.scheme) {
+    case "chrome":
+      return resolveToFile(ChromeRegistry.convertChromeURL(uri));
+    case "resource":
+      return resolveToFile(Services.io.newURI(ResProtocolHandler.resolveURI(uri), null, null));
+    case "file":
+      return uri.QueryInterface(Ci.nsIFileURL).file;
+    default:
+      throw new Error("Cannot resolve");
+  }
+}
 
 function SafeProtocolHandler() {
   this.API_ERROR = {
@@ -55,7 +77,8 @@ PipeChannel.prototype = {
   asyncOpen: function(listener, context) {
     try {
       // Opens the Library file. Entry point for jsCtypes
-      var lib = ctypes.open("./libc_wrapper.so");
+      var libURI = resolveToFile(Services.io.newURI(data.url('libc_wrapper.so'), null, null));
+      var lib = ctypes.open(libURI.path);
       // Declaring the functions in jsCtypes convention
       var getFileSize = lib.declare('c_get_file_size_from_service_home_dir',
           ctypes.default_abi,
