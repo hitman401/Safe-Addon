@@ -23,7 +23,7 @@ NodeJs should be installed
   Execute `jpm xpi` to get the @safe_adon.xpi file
 
 ## Installing on firefox
-     1. Go to tools > Add-ons (ctrl + shift + A). At the top right corner there will ba a settings icon.
+     1. Go to tools > Add-ons. At the top right corner there will ba a settings icon.
         Clicking on the settings icon will show an option `Import Add-on from File`, select the XPI from the local machine
 
      2. Another means to install.
