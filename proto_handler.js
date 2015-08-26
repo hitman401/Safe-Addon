@@ -33,10 +33,10 @@ function getLibraryFileName() {
   var system = require('sdk/system');
   // OS_TARGET (https://developer.mozilla.org/en-US/docs/OS_TARGET)
   var EXTENSION = {
-    'WINNT': 'dll',
-    'Linux': 'so',
-    'Darwin': 'dylib'
-  }[system.platform];
+    'winnt': 'dll',
+    'linux': 'so',
+    'darwin': 'dylib'
+  }[system.platform.toLowerCase()];
   return 'libc_wrapper.' + EXTENSION;
 }
 
