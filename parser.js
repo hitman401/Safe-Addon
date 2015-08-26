@@ -1,14 +1,3 @@
-var getPublicName = function (tokenStartPosition, tokens) {
-  var temp = '';
-  for (var i = tokenStartPosition; i < tokens.length; i++) {
-    temp += tokens[i];
-    if (i + 1 !== tokens.length) {
-      temp += '.';
-    }
-  }
-  return temp;
-};
-
 exports.parse = function (uriPath) {
   var serviceName;
   var publicName;
@@ -23,12 +12,12 @@ exports.parse = function (uriPath) {
     }
   }
   tokens = tokens[0].split('.');
-  if (tokens.length < 3) { // if the service is not mentioned in the URI, eg: safe:maidsafe.net
+  if (tokens.length === 1) { // if the service is not mentioned in the URI, eg: safe:maidsafe.net
     serviceName = 'www'; // default lookup service
-    publicName = getPublicName(0, tokens);
+    publicName = tokens[0];
   } else {
     serviceName = tokens[0];
-    publicName = getPublicName(1, tokens);
+    publicName = tokens[1];
   }
   // Set default file to lookup if filePath is empty
   if (!filePath) {
