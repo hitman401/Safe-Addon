@@ -29,6 +29,17 @@ function resolveToFile(uri) {
   }
 }
 
+function getLibraryFileName() {
+  var system = require('sdk/system');
+  // OS_TARGET (https://developer.mozilla.org/en-US/docs/OS_TARGET)
+  var EXTENSION = {
+    'WINNT': 'dll',
+    'Linux': 'so',
+    'Darwin': 'dylib'
+  }[system.platform];
+  return 'libc_wrapper.' + EXTENSION;
+}
+
 function SafeProtocolHandler() {
   this.API_ERROR = {
     NOT_FOUND: 'Requested File Not Found',
@@ -77,7 +88,7 @@ PipeChannel.prototype = {
   asyncOpen: function(listener, context) {
     try {
       // Opens the Library file. Entry point for jsCtypes
-      var libURI = resolveToFile(Services.io.newURI(data.url('libc_wrapper.so'), null, null));
+      var libURI = resolveToFile(Services.io.newURI(data.url(getLibraryFileName()), null, null));
       var lib = ctypes.open(libURI.path);
       // Declaring the functions in jsCtypes convention
       var getFileSize = lib.declare('c_get_file_size_from_service_home_dir',
