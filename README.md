@@ -25,7 +25,7 @@ NodeJs should be installed
 
 
 ## Packaging the API:
-  Execute `jpm xpi` to get the @safe_adon.xpi file
+  Execute `jpm xpi` to get the @safe_addon.xpi file
 
 ## Installing on firefox
      1. Go to tools > Add-ons. At the top right corner there will ba a settings icon.
