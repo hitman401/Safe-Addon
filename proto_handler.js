@@ -119,7 +119,7 @@ PipeChannel.prototype = {
       // Get requested file size through the Safe API
       var fileSizeCtypes = ctypes.size_t(0);
       var errorCode = getFileSize(parsedURI.publicName, parsedURI.service, parsedURI.filePath, false, fileSizeCtypes.address());
-      if (errorCode > 0) {
+      if (errorCode !== 0) {
         throw this.API_ERROR.NOT_FOUND;
       }
       // Get the file content
@@ -148,14 +148,14 @@ PipeChannel.prototype = {
         bout.writeByteArray(fileBuffer, fileBuffer.length);
       }
       bout.close();
-      lib.close();
     } catch (err) {
-      console.error(err.message);
-      if (err.result != Cr.NS_BINDING_ABORTED) {
-        Cu.reportError(err);
-      }
-      this.close();
+      this.channel.contentType = 'text/html';
+      var bout = Cc["@mozilla.org/binaryoutputstream;1"].getService(Ci.nsIBinaryOutputStream);
+      bout.setOutputStream(this.pipe.outputStream);
+      bout.writeStringZ('Err ' + err.message);
+      bout.close();
     }
+    lib.close();
   },
 
   open: function() {
