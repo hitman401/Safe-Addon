@@ -7,21 +7,10 @@ NodeJs should be installed
 ##Setting up
 
  1. JPM sdk is used to build the add on. Follow this [link](https://developer.mozilla.org/en-US/Add-ons/SDK/Tools/jpm#Installation) for installation instructions.
- 2. Clone the [Safe-FFI](https://github.com/ustulation/safe_ffi) repository
-    1. Build *Static library* of the Rust code - `cd Rust && cargo build --release && cd ..`
-    2. Build the c_wrapper for JS-Ctypes
-       Linux
-       ```
-       gcc -shared -std=c99 -Wall -Werror -O2 -s -fvisibility=hidden -fPIC -o libc_wrapper.so c/c_wrapper.c -L./rust/target/release -lsafe_ffi -lsodium
-       ```
-       OSX
-       ```
-       gcc -shared -std=c99 -Wall -Werror -O2 -s -fvisibility=hidden -fPIC -o libc_wrapper.dylib c/c_wrapper.c -L./rust/target/release -lsafe_ffi -lsodium
-       ```
 
-       This will yield `libc_wrapper.so/libc_wrapper.dylib`(linux/osx)
+ 2. Clone the [Safe-FFI](https://github.com/ustulation/safe_ffi) repository and build *Dynamic library* of the Rust code - `cd Rust && cargo build --release && cd ..`
 
- 3. Copy the `libc_wrapper.{so, dylib}` to the `data` folder of the `Safe-Addon`
+ 3. Copy the `libc_wrapper.{so, dylib}` from the `target/release` folder to the `data` folder of the `Safe-Addon`
 
 
 ## Packaging the API:

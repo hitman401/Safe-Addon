@@ -37,7 +37,7 @@ function getLibraryFileName() {
     'linux': 'so',
     'darwin': 'dylib'
   }[system.platform.toLowerCase()];
-  return 'libc_wrapper.' + EXTENSION;
+  return 'libsafe_ffi.' + EXTENSION;
 }
 
 function SafeProtocolHandler() {
@@ -91,7 +91,7 @@ PipeChannel.prototype = {
       var libURI = resolveToFile(Services.io.newURI(data.url(getLibraryFileName()), null, null));
       var lib = ctypes.open(libURI.path);
       // Declaring the functions in jsCtypes convention
-      var getFileSize = lib.declare('c_get_file_size_from_service_home_dir',
+      var getFileSize = lib.declare('get_file_size_from_service_home_dir',
           ctypes.default_abi,
           ctypes.int32_t,
           ctypes.char.ptr,
@@ -100,7 +100,7 @@ PipeChannel.prototype = {
           ctypes.bool,
           ctypes.size_t.ptr);
 
-      var getFileContent = lib.declare('c_get_file_content_from_service_home_dir',
+      var getFileContent = lib.declare('get_file_content_from_service_home_dir',
           ctypes.default_abi,
           ctypes.int32_t,
           ctypes.char.ptr,
