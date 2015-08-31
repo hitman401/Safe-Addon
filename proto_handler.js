@@ -3,13 +3,22 @@ Cu.import("resource://gre/modules/ctypes.jsm");
 Cu.import("resource://gre/modules/Services.jsm");
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 const ResProtocolHandler = Services.io.getProtocolHandler("resource").
-                           QueryInterface(Ci.nsIResProtocolHandler);
+    QueryInterface(Ci.nsIResProtocolHandler);
 const ChromeRegistry = Cc["@mozilla.org/chrome/chrome-registry;1"].
-                       getService(Ci.nsIChromeRegistry);
+    getService(Ci.nsIChromeRegistry);
 const {data} = require('sdk/self');
 const SCHEME = "safe";
-const SEGMENT_SIZE = 1000;
-const MAX_SEGMENT_COUNT = 1000;
+const SEGMENT_SIZE = 1024;
+const MAX_SEGMENT_COUNT = 1024;
+
+
+var onException = function(channel, outputStream, errorMessage) {
+  channel.contentType = 'text/html';
+  var bout = Cc["@mozilla.org/binaryoutputstream;1"].getService(Ci.nsIBinaryOutputStream);
+  bout.setOutputStream(outputStream);
+  bout.writeUtf8Z('Error :: ' + errorMessage);
+  bout.close();
+};
 
 /**
  * Returns FileURI.
@@ -40,11 +49,30 @@ function getLibraryFileName() {
   return 'libsafe_ffi.' + EXTENSION;
 }
 
+// Opens the Library file. Entry point for jsCtypes
+var libURI = resolveToFile(Services.io.newURI(data.url(getLibraryFileName()), null, null));
+var lib = ctypes.open(libURI.path);
+// Declaring the functions in jsCtypes convention
+var getFileSize = lib.declare('get_file_size_from_service_home_dir',
+    ctypes.default_abi,
+    ctypes.int32_t,
+    ctypes.char.ptr,
+    ctypes.char.ptr,
+    ctypes.char.ptr,
+    ctypes.bool,
+    ctypes.size_t.ptr);
+
+var getFileContent = lib.declare('get_file_content_from_service_home_dir',
+    ctypes.default_abi,
+    ctypes.int32_t,
+    ctypes.char.ptr,
+    ctypes.char.ptr,
+    ctypes.char.ptr,
+    ctypes.bool,
+    ctypes.uint8_t.ptr);
+
 function SafeProtocolHandler() {
-  this.API_ERROR = {
-    NOT_FOUND: 'Requested File Not Found',
-    INTERNAL_ERROR: 'Internal Error. Failed to complete the operation'
-  }
+
 }
 SafeProtocolHandler.prototype = Object.freeze({
   classDescription: "Safe Protocol Handler",
@@ -87,28 +115,6 @@ PipeChannel.prototype = {
 
   asyncOpen: function(listener, context) {
     try {
-      // Opens the Library file. Entry point for jsCtypes
-      var libURI = resolveToFile(Services.io.newURI(data.url(getLibraryFileName()), null, null));
-      var lib = ctypes.open(libURI.path);
-      // Declaring the functions in jsCtypes convention
-      var getFileSize = lib.declare('get_file_size_from_service_home_dir',
-          ctypes.default_abi,
-          ctypes.int32_t,
-          ctypes.char.ptr,
-          ctypes.char.ptr,
-          ctypes.char.ptr,
-          ctypes.bool,
-          ctypes.size_t.ptr);
-
-      var getFileContent = lib.declare('get_file_content_from_service_home_dir',
-          ctypes.default_abi,
-          ctypes.int32_t,
-          ctypes.char.ptr,
-          ctypes.char.ptr,
-          ctypes.char.ptr,
-          ctypes.bool,
-          ctypes.uint8_t.ptr);
-
       var parsedURI = require('./parser').parse(this.channel.URI.path);
       // Set the mime type of the content being served
       var mimeService = Cc["@mozilla.org/mime;1"].getService(Ci.nsIMIMEService);
@@ -120,14 +126,14 @@ PipeChannel.prototype = {
       var fileSizeCtypes = ctypes.size_t(0);
       var errorCode = getFileSize(parsedURI.publicName, parsedURI.service, parsedURI.filePath, false, fileSizeCtypes.address());
       if (errorCode !== 0) {
-        throw this.API_ERROR.NOT_FOUND;
+        throw new Error("File Not found");
       }
       // Get the file content
       var Uint8Array_t = ctypes.ArrayType(ctypes.uint8_t, fileSizeCtypes.value);
       var fileContent = Uint8Array_t();
       errorCode = getFileContent(parsedURI.publicName, parsedURI.service, parsedURI.filePath, false, fileContent.addressOfElement(0));
-      if (errorCode > 0) {
-        throw this.API_ERROR.INTERNAL_ERROR;
+      if (errorCode !== 0) {
+        throw new Error("Failed to get content");
       }
       // Prepare the stream by setting the content length to be sent
       this.channel.contentLength = fileContent.length;
@@ -149,13 +155,8 @@ PipeChannel.prototype = {
       }
       bout.close();
     } catch (err) {
-      this.channel.contentType = 'text/html';
-      var bout = Cc["@mozilla.org/binaryoutputstream;1"].getService(Ci.nsIBinaryOutputStream);
-      bout.setOutputStream(this.pipe.outputStream);
-      bout.writeStringZ('Err ' + err.message);
-      bout.close();
+      onException(this.channel, this.pipe.outputStream, err.message);
     }
-    lib.close();
   },
 
   open: function() {
